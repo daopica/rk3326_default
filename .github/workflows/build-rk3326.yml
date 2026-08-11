@@ -34,12 +34,12 @@ jobs:
           nproc
 
       # ==========================================================
-      # 2. 修复 Ubuntu 18.04 软件源
+      # 2. 修复 Ubuntu  软件源
       # ==========================================================
       - name: Setup Ubuntu 18.04 repositories
         run: |
           echo "=========================================="
-          echo "Setup Ubuntu 18.04 repositories"
+          echo "Setup Ubuntu repositories"
           echo "=========================================="
           apt-get update
 
@@ -151,101 +151,16 @@ jobs:
             || true
 
       # ==========================================================
-      # 7. 查找 RK3326 defconfig
+      # 7. Make RK3326 defconfig
       # ==========================================================
       - name: Find RK3326 defconfig
         working-directory: u-boot
         run: |
           echo "=========================================="
-          echo "RK3326 defconfig"
+          echo "make RK3326 defconfig"
           echo "=========================================="
 
-          CONFIGS=$(find configs -maxdepth 1 -type f -iname '*rk3326*' -print | sort)
-          echo "$CONFIGS"
-
-          if [ -z "$CONFIGS" ]; then
-            echo
-            echo "ERROR: RK3326 defconfig not found!"
-            exit 1
-          fi
-
-      # ==========================================================
-      # 8. 自动选择 RK3326 defconfig
-      # ==========================================================
-      - name: Select RK3326 defconfig
-        working-directory: u-boot
-        run: |
-          echo "=========================================="
-          echo "Select RK3326 defconfig"
-          echo "=========================================="
-
-          CONFIG=$(find configs \
-            -maxdepth 1 \
-            -type f \
-            -iname '*rk3326*' \
-            -printf '%f\n' \
-            | head -1)
-
-          if [ -z "$CONFIG" ]; then
-            echo
-            echo "ERROR: RK3326 defconfig not found!"
-            exit 1
-          fi
-
-          echo
-          echo "Selected:"
-          echo "$CONFIG"
-
-          echo "$CONFIG" > ../rk_defconfig.txt
-
-      # ==========================================================
-      # 9. 配置 U-Boot
-      # ==========================================================
-      - name: Configure U-Boot
-        working-directory: u-boot
-        env:
-          ARCH: arm64
-          CROSS_COMPILE: aarch64-linux-gnu-
-        run: |
-          echo "=========================================="
-          echo "Configure RK3326 U-Boot"
-          echo "=========================================="
-
-          RK_DEFCONFIG=$(cat ../rk_defconfig.txt)
-
-          echo "Using:"
-          echo "$RK_DEFCONFIG"
-
-          make \
-            ARCH="${ARCH}" \
-            CROSS_COMPILE="${CROSS_COMPILE}" \
-            "${RK_DEFCONFIG}"
-
-      # ==========================================================
-      # 10. 检查 U-Boot 配置
-      # ==========================================================
-      - name: Show U-Boot configuration
-        working-directory: u-boot
-        run: |
-          echo "=========================================="
-          echo "U-Boot configuration"
-          echo "=========================================="
-
-          echo
-          echo "Defconfig:"
-          cat ../rk_defconfig.txt
-
-          echo
-          echo "Important configuration:"
-
-          grep -E \
-            'CONFIG_(ARCH_ROCKCHIP|ROCKCHIP|RK3326|ARM64|SPL|TPL|FIT)' \
-            .config \
-            || true
-
-          echo
-          echo "Config size:"
-          wc -l .config
+          make rk3326_defconfig
 
       # ==========================================================
       # 11. 编译 U-Boot
@@ -264,10 +179,7 @@ jobs:
           echo "CPU cores:"
           nproc
 
-          make \
-            ARCH="${ARCH}" \
-            CROSS_COMPILE="${CROSS_COMPILE}" \
-            -j"$(nproc)"
+          make ARCH="${ARCH}" CROSS_COMPILE="${CROSS_COMPILE}" -j"$(nproc)"
 
       # ==========================================================
       # 12. 编译 u-boot.itb
