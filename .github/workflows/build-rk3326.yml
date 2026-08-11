@@ -32,6 +32,26 @@ jobs:
           echo "CPU:"
           nproc
 
+      # ==========================================================
+      # 2. 获取官方源码
+      # ==========================================================
+
+      - name: Clone official source
+        run: |
+          echo "=========================================="
+          echo "Clone official Rockchip source"
+          echo "=========================================="
+
+          git clone https://github.com/rockchip-linux/u-boot.git
+          git clone https://github.com/rockchip-linux/rkbin.git
+
+          echo
+          echo "u-boot:"
+          ls -lah u-boot
+
+          echo
+          echo "rkbin:"
+          ls -lah rkbin
 
       # ==========================================================
       # 3. 安装编译环境
@@ -73,9 +93,8 @@ jobs:
             rsync \
             openssl
 
-
       # ==========================================================
-      # 4. 安装 AArch64 交叉编译器
+      # 4. 安装 AArch64 工具链
       # ==========================================================
 
       - name: Install AArch64 toolchain
@@ -99,37 +118,8 @@ jobs:
           echo "Binutils:"
           aarch64-linux-gnu-ld --version | head -1
 
-
       # ==========================================================
-      # 5. 获取当前仓库源码
-      # ==========================================================
-
-      - name: Checkout source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "=========================================="
-          echo "Checkout source"
-          echo "=========================================="
-
-          git clone \
-            --depth=1 \
-            --branch "${GITHUB_REF_NAME}" \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            .
-
-          echo
-          echo "Repository:"
-          ls -lah
-
-          echo
-          echo "Git:"
-          git config --global --add safe.directory "$(pwd)"
-          git log -1 --oneline
-
-
-      # ==========================================================
-      # 6. 检查 U-Boot 源码
+      # 5. 检查 U-Boot 源码
       # ==========================================================
 
       - name: Check U-Boot source
@@ -138,7 +128,7 @@ jobs:
           echo "U-Boot source"
           echo "=========================================="
 
-          ls -lah u-boot
+          ls -lh u-boot
 
           echo
           echo "U-Boot version:"
@@ -147,29 +137,27 @@ jobs:
             u-boot/Makefile \
             || true
 
-
       # ==========================================================
-      # 7. Make RK3326 defconfig
+      # 6. Make RK3326 defconfig
       # ==========================================================
 
-      - name: Find RK3326 defconfig
+      - name: Make RK3326 defconfig
         working-directory: u-boot
         run: |
           echo "=========================================="
           echo "make RK3326 defconfig"
           echo "=========================================="
 
-          cp ../rkbin/bin/rk33/rk3326_bl31_v1.34.elf ./bl31.elf
-
           make distclean
+
+          cp ../rkbin/bin/rk33/rk3326_bl31_v1.34.elf ./bl31.elf
 
           make rk3326_defconfig
 
           echo "rk3326_defconfig" > ../rk_defconfig.txt
 
-
       # ==========================================================
-      # 11. 编译 U-Boot
+      # 7. 编译 U-Boot
       # ==========================================================
 
       - name: Build U-Boot
@@ -187,24 +175,15 @@ jobs:
           nproc
 
           echo
-          echo "Create ARM64 include directory:"
-          mkdir -p arch/arm64/include/asm
-
-          echo
-          echo "Check directory:"
-          ls -ld arch/arm64/include
-          ls -ld arch/arm64/include/asm
-
-          echo
           echo "Build:"
+
           make \
             ARCH="${ARCH}" \
             CROSS_COMPILE="${CROSS_COMPILE}" \
             -j"$(nproc)"
 
-
       # ==========================================================
-      # 12. 编译 u-boot.itb
+      # 8. 编译 u-boot.itb
       # ==========================================================
 
       - name: Build u-boot.itb
@@ -226,9 +205,8 @@ jobs:
           echo "u-boot.itb:"
           ls -lh u-boot.itb
 
-
       # ==========================================================
-      # 13. 检查 TPL / SPL
+      # 9. 检查 TPL / SPL
       # ==========================================================
 
       - name: Check TPL and SPL
@@ -246,9 +224,8 @@ jobs:
           echo "SPL:"
           ls -lh spl/u-boot-spl.bin
 
-
       # ==========================================================
-      # 14. 检查 mkimage
+      # 10. 检查 mkimage
       # ==========================================================
 
       - name: Check mkimage
@@ -273,9 +250,8 @@ jobs:
             | head -80 \
             || true
 
-
       # ==========================================================
-      # 15. 生成 idbloader.img
+      # 11. 生成 idbloader.img
       # ==========================================================
 
       - name: Build idbloader.img
@@ -316,9 +292,8 @@ jobs:
           echo "SHA256:"
           sha256sum idbloader.img
 
-
       # ==========================================================
-      # 16. 创建 Artifact 目录
+      # 12. 创建 Artifact 目录
       # ==========================================================
 
       - name: Prepare build output
@@ -328,31 +303,23 @@ jobs:
           mkdir -p build-output/idbloader
           mkdir -p build-output/config
 
-
       # ==========================================================
-      # 17. 收集 U-Boot 编译结果
+      # 13. 收集 U-Boot 编译结果
       # ==========================================================
 
       - name: Collect U-Boot output
         if: always()
         run: |
           cp u-boot/u-boot.itb build-output/u-boot/ 2>/dev/null || true
-
           cp u-boot/u-boot.bin build-output/u-boot/ 2>/dev/null || true
-
           cp u-boot/u-boot-nodtb.bin build-output/u-boot/ 2>/dev/null || true
-
           cp u-boot/u-boot-dtb.bin build-output/u-boot/ 2>/dev/null || true
-
           cp u-boot/u-boot.dtb build-output/u-boot/ 2>/dev/null || true
-
           cp u-boot/spl/u-boot-spl.bin build-output/u-boot/ 2>/dev/null || true
-
           cp u-boot/tpl/u-boot-tpl.bin build-output/u-boot/ 2>/dev/null || true
 
-
       # ==========================================================
-      # 18. 收集 idbloader.img
+      # 14. 收集 idbloader
       # ==========================================================
 
       - name: Collect idbloader
@@ -360,21 +327,18 @@ jobs:
         run: |
           cp u-boot/idbloader.img build-output/idbloader/ 2>/dev/null || true
 
-
       # ==========================================================
-      # 19. 收集配置
+      # 15. 收集配置
       # ==========================================================
 
       - name: Collect configuration
         if: always()
         run: |
           cp u-boot/.config build-output/config/u-boot.config 2>/dev/null || true
-
           cp rk_defconfig.txt build-output/config/ 2>/dev/null || true
 
-
       # ==========================================================
-      # 20. 生成 Build 信息
+      # 16. 生成 Build 信息
       # ==========================================================
 
       - name: Generate build information
@@ -388,17 +352,15 @@ jobs:
             echo "Build date:"
             date
             echo
-            echo "Repository:"
-            echo "${GITHUB_REPOSITORY}"
+            echo "U-Boot source:"
+            echo "https://github.com/rockchip-linux/u-boot"
+            echo
+            echo "rkbin source:"
+            echo "https://github.com/rockchip-linux/rkbin"
             echo
             echo "Commit:"
-            echo "${GITHUB_SHA}"
-            echo
-            echo "Branch:"
-            echo "${GITHUB_REF_NAME}"
-            echo
-            echo "Defconfig:"
-            cat rk_defconfig.txt 2>/dev/null || true
+            cd u-boot
+            git rev-parse HEAD
             echo
             echo "Compiler:"
             aarch64-linux-gnu-gcc --version | head -1
@@ -407,9 +369,8 @@ jobs:
             echo "arm64"
           } > build-output/build-info.txt
 
-
       # ==========================================================
-      # 21. 生成 SHA256
+      # 17. 生成 SHA256
       # ==========================================================
 
       - name: Generate SHA256
@@ -425,9 +386,8 @@ jobs:
 
           cat SHA256SUMS
 
-
       # ==========================================================
-      # 22. 显示最终成果
+      # 18. 显示最终成果
       # ==========================================================
 
       - name: Show build output
@@ -439,9 +399,8 @@ jobs:
 
           find build-output -type f -exec ls -lh {} \;
 
-
       # ==========================================================
-      # 23. 上传 Artifact
+      # 19. 上传 Artifact
       # ==========================================================
 
       - name: Upload build artifacts
