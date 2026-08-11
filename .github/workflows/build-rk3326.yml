@@ -34,16 +34,6 @@ jobs:
           nproc
 
       # ==========================================================
-      # 2. 修复 Ubuntu  软件源
-      # ==========================================================
-      - name: Setup Ubuntu 18.04 repositories
-        run: |
-          echo "=========================================="
-          echo "Setup Ubuntu repositories"
-          echo "=========================================="
-          apt-get update
-
-      # ==========================================================
       # 3. 安装编译环境
       # ==========================================================
       - name: Install build dependencies
@@ -52,7 +42,7 @@ jobs:
           echo "Install build dependencies"
           echo "=========================================="
 
-          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y \
             build-essential \
             gcc \
             g++ \
