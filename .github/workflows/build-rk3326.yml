@@ -169,8 +169,22 @@ jobs:
           echo "CPU cores:"
           nproc
 
-          make ARCH="${ARCH}" CROSS_COMPILE="${CROSS_COMPILE}" -j"$(nproc)"
+          echo
+          echo "Create ARM64 include directory:"
+          mkdir -p arch/arm64/include/asm
 
+          echo
+          echo "Check directory:"
+          ls -ld arch/arm64/include
+          ls -ld arch/arm64/include/asm
+
+          echo
+          echo "Build:"
+          make \
+            ARCH="${ARCH}" \
+            CROSS_COMPILE="${CROSS_COMPILE}" \
+            -j"$(nproc)"
+            
       # ==========================================================
       # 12. 编译 u-boot.itb
       # ==========================================================
