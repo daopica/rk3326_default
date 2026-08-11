@@ -43,34 +43,34 @@ jobs:
           echo "=========================================="
 
           DEBIAN_FRONTEND=noninteractive sudo apt-get update && sudo apt-get install -y \
-            build-essential \
-            gcc \
-            g++ \
-            make \
-            bc \
-            bison \
-            flex \
-            libssl-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            device-tree-compiler \
-            swig \
-            python \
-            python-dev \
-            python-pip \
-            pkg-config \
-            cpio \
-            file \
-            wget \
-            curl \
-            git \
-            ca-certificates \
-            xz-utils \
-            gzip \
-            bzip2 \
-            unzip \
-            rsync \
-            openssl
+          build-essential \
+          gcc \
+          g++ \
+          make \
+          bc \
+          bison \
+          flex \
+          libssl-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          device-tree-compiler \
+          swig \
+          python3 \
+          python3-dev \
+          python3-pip \
+          pkg-config \
+          cpio \
+          file \
+          wget \
+          curl \
+          git \
+          ca-certificates \
+          xz-utils \
+          gzip \
+          bzip2 \
+          unzip \
+          rsync \
+          openssl
 
       # ==========================================================
       # 4. 安装 AArch64 交叉编译器
