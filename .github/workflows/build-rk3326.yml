@@ -8,9 +8,6 @@ jobs:
   build:
     name: Build RK3326 U-Boot
     runs-on: ubuntu-22.04
-    container:
-      image: ubuntu:18.04
-    timeout-minutes: 90
 
     steps:
 
