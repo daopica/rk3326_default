@@ -74,6 +74,10 @@ jobs:
             unzip \
             rsync \
             openssl
+
+          echo "Python:"
+          which python3
+          python3 --version
       # ==========================================================
       # 3. 安装 AArch64 工具链
       # ==========================================================
@@ -161,12 +165,12 @@ jobs:
       # ==========================================================
       # 7. 编译 U-Boot
       # ==========================================================
-
       - name: Build U-Boot
         working-directory: u-boot
         env:
+          ARCH: arm64
           CROSS_COMPILE: aarch64-linux-gnu-
-        run: |
+        run: |       
           echo "=========================================="
           echo "Build RK3326 U-Boot"
           echo "=========================================="
@@ -176,17 +180,10 @@ jobs:
           nproc
 
           echo
-          echo "ARCH:"
-          echo "${ARCH:-default}"
-
-          echo
-          echo "CROSS_COMPILE:"
-          echo "${CROSS_COMPILE}"
-
-          echo
           echo "Build:"
 
           make \
+            ARCH="${ARCH}" \
             CROSS_COMPILE="${CROSS_COMPILE}" \
             -j"$(nproc)"
 
