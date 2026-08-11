@@ -8,6 +8,9 @@ jobs:
     name: Build RK3326 U-Boot
     runs-on: ubuntu-22.04
 
+    container:
+      image: ubuntu:18.04
+
     steps:
 
       # ==========================================================
@@ -33,7 +36,74 @@ jobs:
           nproc
 
       # ==========================================================
-      # 2. 获取官方源码
+      # 2. 安装编译环境
+      # ==========================================================
+
+      - name: Install build dependencies
+        run: |
+          echo "=========================================="
+          echo "Install build dependencies"
+          echo "=========================================="
+
+          apt-get update
+
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential \
+            gcc \
+            g++ \
+            make \
+            bc \
+            bison \
+            flex \
+            libssl-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            device-tree-compiler \
+            swig \
+            python \
+            python-dev \
+            python-pip \
+            pkg-config \
+            cpio \
+            file \
+            wget \
+            curl \
+            git \
+            ca-certificates \
+            xz-utils \
+            gzip \
+            bzip2 \
+            unzip \
+            rsync \
+            openssl
+
+      # ==========================================================
+      # 3. 安装 AArch64 工具链
+      # ==========================================================
+
+      - name: Install AArch64 toolchain
+        run: |
+          echo "=========================================="
+          echo "Install AArch64 toolchain"
+          echo "=========================================="
+
+          apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
+
+          echo
+          echo "Compiler:"
+          which aarch64-linux-gnu-gcc
+
+          aarch64-linux-gnu-gcc --version
+
+          echo
+          echo "Binutils:"
+          aarch64-linux-gnu-ld --version | head -1
+
+      # ==========================================================
+      # 4. 获取官方源码
       # ==========================================================
 
       - name: Clone official source
@@ -54,72 +124,7 @@ jobs:
           ls -lah rkbin
 
       # ==========================================================
-      # 3. 安装编译环境
-      # ==========================================================
-
-      - name: Install build dependencies
-        run: |
-          echo "=========================================="
-          echo "Install build dependencies"
-          echo "=========================================="
-
-          DEBIAN_FRONTEND=noninteractive sudo apt-get update && sudo apt-get install -y \
-            build-essential \
-            gcc \
-            g++ \
-            make \
-            bc \
-            bison \
-            flex \
-            libssl-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            device-tree-compiler \
-            swig \
-            python3 \
-            python3-dev \
-            python3-pip \
-            pkg-config \
-            cpio \
-            file \
-            wget \
-            curl \
-            git \
-            ca-certificates \
-            xz-utils \
-            gzip \
-            bzip2 \
-            unzip \
-            rsync \
-            openssl
-
-      # ==========================================================
-      # 4. 安装 AArch64 工具链
-      # ==========================================================
-
-      - name: Install AArch64 toolchain
-        run: |
-          echo "=========================================="
-          echo "Install AArch64 toolchain"
-          echo "=========================================="
-
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu
-
-          echo
-          echo "Compiler:"
-          which aarch64-linux-gnu-gcc
-
-          aarch64-linux-gnu-gcc --version
-
-          echo
-          echo "Binutils:"
-          aarch64-linux-gnu-ld --version | head -1
-
-      # ==========================================================
-      # 5. 检查 U-Boot 源码
+      # 5. 检查 U-Boot
       # ==========================================================
 
       - name: Check U-Boot source
@@ -138,7 +143,7 @@ jobs:
             || true
 
       # ==========================================================
-      # 6. Make RK3326 defconfig
+      # 6. RK3326 defconfig
       # ==========================================================
 
       - name: Make RK3326 defconfig
@@ -163,7 +168,6 @@ jobs:
       - name: Build U-Boot
         working-directory: u-boot
         env:
-          ARCH: arm64
           CROSS_COMPILE: aarch64-linux-gnu-
         run: |
           echo "=========================================="
@@ -175,10 +179,17 @@ jobs:
           nproc
 
           echo
+          echo "ARCH:"
+          echo "${ARCH:-default}"
+
+          echo
+          echo "CROSS_COMPILE:"
+          echo "${CROSS_COMPILE}"
+
+          echo
           echo "Build:"
 
           make \
-            ARCH="${ARCH}" \
             CROSS_COMPILE="${CROSS_COMPILE}" \
             -j"$(nproc)"
 
@@ -189,7 +200,6 @@ jobs:
       - name: Build u-boot.itb
         working-directory: u-boot
         env:
-          ARCH: arm64
           CROSS_COMPILE: aarch64-linux-gnu-
         run: |
           echo "=========================================="
@@ -197,7 +207,6 @@ jobs:
           echo "=========================================="
 
           make \
-            ARCH="${ARCH}" \
             CROSS_COMPILE="${CROSS_COMPILE}" \
             u-boot.itb
 
@@ -242,14 +251,6 @@ jobs:
 
           ls -lh tools/mkimage
 
-          echo
-          echo "mkimage help:"
-
-          ./tools/mkimage -h \
-            2>&1 \
-            | head -80 \
-            || true
-
       # ==========================================================
       # 11. 生成 idbloader.img
       # ==========================================================
@@ -263,17 +264,11 @@ jobs:
 
           rm -f idbloader.img
 
-          echo
-          echo "Step 1: Create TPL image"
-
           ./tools/mkimage \
             -n rk3326 \
             -T rksd \
             -d tpl/u-boot-tpl.bin \
             idbloader.img
-
-          echo
-          echo "Step 2: Append SPL"
 
           cat spl/u-boot-spl.bin >> idbloader.img
 
@@ -358,7 +353,7 @@ jobs:
             echo "rkbin source:"
             echo "https://github.com/rockchip-linux/rkbin"
             echo
-            echo "Commit:"
+            echo "U-Boot commit:"
             cd u-boot
             git rev-parse HEAD
             echo
@@ -366,7 +361,7 @@ jobs:
             aarch64-linux-gnu-gcc --version | head -1
             echo
             echo "Architecture:"
-            echo "arm64"
+            echo "U-Boot default"
           } > build-output/build-info.txt
 
       # ==========================================================
@@ -378,7 +373,9 @@ jobs:
         run: |
           cd build-output
 
-          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          find . -type f ! -name SHA256SUMS -print0 | \
+            sort -z | \
+            xargs -0 sha256sum > SHA256SUMS
 
           echo "=========================================="
           echo "SHA256SUMS"
