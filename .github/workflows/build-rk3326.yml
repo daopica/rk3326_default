@@ -1,3 +1,4 @@
+
 name: RK3326 U-Boot Build
 
 "on":
@@ -7,33 +8,506 @@ jobs:
   build:
     name: Build RK3326 U-Boot
     runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:18.04
+    timeout-minutes: 90
 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+
+      # ==========================================================
+      # 1. 显示基础环境
+      # ==========================================================
 
       - name: Show environment
         run: |
-          echo "================================"
-          echo "Ubuntu"
-          echo "================================"
+          echo "=========================================="
+          echo "RK3326 U-Boot Build"
+          echo "=========================================="
+
+          echo
+          echo "Ubuntu:"
           cat /etc/os-release
 
           echo
-          echo "================================"
-          echo "Repository"
-          echo "================================"
+          echo "Kernel:"
+          uname -a
+
+          echo
+          echo "CPU:"
+          nproc
+
+      # ==========================================================
+      # 2. 修复 Ubuntu 18.04 软件源
+      # ==========================================================
+      - name: Setup Ubuntu 18.04 repositories
+        run: |
+          echo "=========================================="
+          echo "Setup Ubuntu 18.04 repositories"
+          echo "=========================================="
+
+          sed -i \
+            -e 's|http://archive.ubuntu.com/ubuntu/|http://old-releases.ubuntu.com/ubuntu/|g' \
+            -e 's|http://security.ubuntu.com/ubuntu/|http://old-releases.ubuntu.com/ubuntu/|g' \
+            /etc/apt/sources.list
+          apt-get update
+
+      # ==========================================================
+      # 3. 安装编译环境
+      # ==========================================================
+      - name: Install build dependencies
+        run: |
+          echo "=========================================="
+          echo "Install build dependencies"
+          echo "=========================================="
+
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential \
+            gcc \
+            g++ \
+            make \
+            bc \
+            bison \
+            flex \
+            libssl-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            device-tree-compiler \
+            swig \
+            python \
+            python-dev \
+            python-pip \
+            pkg-config \
+            cpio \
+            file \
+            wget \
+            curl \
+            git \
+            ca-certificates \
+            xz-utils \
+            gzip \
+            bzip2 \
+            unzip \
+            rsync \
+            openssl
+
+      # ==========================================================
+      # 4. 安装 AArch64 交叉编译器
+      # ==========================================================
+      - name: Install AArch64 toolchain
+        run: |
+          echo "=========================================="
+          echo "Install AArch64 toolchain"
+          echo "=========================================="
+
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
+
+          echo
+          echo "Compiler:"
+          which aarch64-linux-gnu-gcc
+
+          aarch64-linux-gnu-gcc --version
+
+          echo
+          echo "Binutils:"
+          aarch64-linux-gnu-ld --version | head -1
+
+      # ==========================================================
+      # 5. 获取当前仓库源码
+      # ==========================================================
+      - name: Checkout source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "=========================================="
+          echo "Checkout source"
+          echo "=========================================="
+
+          git clone \
+            --depth=1 \
+            --branch "${GITHUB_REF_NAME}" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            .
+
+          echo
+          echo "Repository:"
           ls -lah
 
           echo
-          echo "U-Boot:"
+          echo "Git:"
+          git log -1 --oneline
+
+      # ==========================================================
+      # 6. 检查 U-Boot 源码
+      # ==========================================================
+      - name: Check U-Boot source
+        run: |
+          echo "=========================================="
+          echo "U-Boot source"
+          echo "=========================================="
+
           ls -lah u-boot
 
           echo
-          echo "rkbin:"
-          ls -lah rkbin
+          echo "U-Boot version:"
+          grep -E \
+            '^(VERSION|PATCHLEVEL|SUBLEVEL) =' \
+            u-boot/Makefile \
+            || true
 
-      - name: Test
+      # ==========================================================
+      # 7. 查找 RK3326 defconfig
+      # ==========================================================
+      - name: Find RK3326 defconfig
+        working-directory: u-boot
         run: |
-          echo "GitHub Actions is working."
-          echo "RK3326 build environment test passed."
+          echo "=========================================="
+          echo "RK3326 defconfig"
+          echo "=========================================="
+
+          CONFIGS=$(find configs -maxdepth 1 -type f -iname '*rk3326*' -print | sort)
+          echo "$CONFIGS"
+
+          if [ -z "$CONFIGS" ]; then
+            echo
+            echo "ERROR: RK3326 defconfig not found!"
+            exit 1
+          fi
+
+      # ==========================================================
+      # 8. 自动选择 RK3326 defconfig
+      # ==========================================================
+      - name: Select RK3326 defconfig
+        working-directory: u-boot
+        run: |
+          echo "=========================================="
+          echo "Select RK3326 defconfig"
+          echo "=========================================="
+
+          CONFIG=$(find configs \
+            -maxdepth 1 \
+            -type f \
+            -iname '*rk3326*' \
+            -printf '%f\n' \
+            | head -1)
+
+          if [ -z "$CONFIG" ]; then
+            echo
+            echo "ERROR: RK3326 defconfig not found!"
+            exit 1
+          fi
+
+          echo
+          echo "Selected:"
+          echo "$CONFIG"
+
+          echo "$CONFIG" > ../rk_defconfig.txt
+
+      # ==========================================================
+      # 9. 配置 U-Boot
+      # ==========================================================
+      - name: Configure U-Boot
+        working-directory: u-boot
+        env:
+          ARCH: arm64
+          CROSS_COMPILE: aarch64-linux-gnu-
+        run: |
+          echo "=========================================="
+          echo "Configure RK3326 U-Boot"
+          echo "=========================================="
+
+          RK_DEFCONFIG=$(cat ../rk_defconfig.txt)
+
+          echo "Using:"
+          echo "$RK_DEFCONFIG"
+
+          make \
+            ARCH="${ARCH}" \
+            CROSS_COMPILE="${CROSS_COMPILE}" \
+            "${RK_DEFCONFIG}"
+
+      # ==========================================================
+      # 10. 检查 U-Boot 配置
+      # ==========================================================
+      - name: Show U-Boot configuration
+        working-directory: u-boot
+        run: |
+          echo "=========================================="
+          echo "U-Boot configuration"
+          echo "=========================================="
+
+          echo
+          echo "Defconfig:"
+          cat ../rk_defconfig.txt
+
+          echo
+          echo "Important configuration:"
+
+          grep -E \
+            'CONFIG_(ARCH_ROCKCHIP|ROCKCHIP|RK3326|ARM64|SPL|TPL|FIT)' \
+            .config \
+            || true
+
+          echo
+          echo "Config size:"
+          wc -l .config
+
+      # ==========================================================
+      # 11. 编译 U-Boot
+      # ==========================================================
+      - name: Build U-Boot
+        working-directory: u-boot
+        env:
+          ARCH: arm64
+          CROSS_COMPILE: aarch64-linux-gnu-
+        run: |
+          echo "=========================================="
+          echo "Build RK3326 U-Boot"
+          echo "=========================================="
+
+          echo
+          echo "CPU cores:"
+          nproc
+
+          make \
+            ARCH="${ARCH}" \
+            CROSS_COMPILE="${CROSS_COMPILE}" \
+            -j"$(nproc)"
+
+      # ==========================================================
+      # 12. 编译 u-boot.itb
+      # ==========================================================
+      - name: Build u-boot.itb
+        working-directory: u-boot
+        env:
+          ARCH: arm64
+          CROSS_COMPILE: aarch64-linux-gnu-
+        run: |
+          echo "=========================================="
+          echo "Build u-boot.itb"
+          echo "=========================================="
+
+          make \
+            ARCH="${ARCH}" \
+            CROSS_COMPILE="${CROSS_COMPILE}" \
+            u-boot.itb
+
+          echo
+          echo "u-boot.itb:"
+          ls -lh u-boot.itb
+
+
+      # ==========================================================
+      # 13. 检查 TPL / SPL
+      # ==========================================================
+
+      - name: Check TPL and SPL
+        working-directory: u-boot
+        run: |
+          echo "=========================================="
+          echo "Check TPL / SPL"
+          echo "=========================================="
+
+          echo
+          echo "TPL:"
+          ls -lh tpl/u-boot-tpl.bin
+
+          echo
+          echo "SPL:"
+          ls -lh spl/u-boot-spl.bin
+
+
+      # ==========================================================
+      # 14. 检查 mkimage
+      # ==========================================================
+
+      - name: Check mkimage
+        working-directory: u-boot
+        run: |
+          echo "=========================================="
+          echo "Check mkimage"
+          echo "=========================================="
+
+          if [ ! -x tools/mkimage ]; then
+            echo "ERROR: tools/mkimage not found."
+            exit 1
+          fi
+
+          ls -lh tools/mkimage
+
+          echo
+          echo "mkimage help:"
+
+          ./tools/mkimage -h \
+            2>&1 \
+            | head -80 \
+            || true
+
+      # ==========================================================
+      # 15. 生成 idbloader.img
+      # ==========================================================
+      - name: Build idbloader.img
+        working-directory: u-boot
+        run: |
+          echo "=========================================="
+          echo "Build idbloader.img"
+          echo "=========================================="
+
+          rm -f idbloader.img
+
+          echo
+          echo "Step 1: Create TPL image"
+
+          ./tools/mkimage \
+            -n rk3326 \
+            -T rksd \
+            -d tpl/u-boot-tpl.bin \
+            idbloader.img
+
+          echo
+          echo "Step 2: Append SPL"
+
+          cat spl/u-boot-spl.bin >> idbloader.img
+
+          echo
+          echo "=========================================="
+          echo "idbloader.img created"
+          echo "=========================================="
+
+          ls -lh idbloader.img
+
+          echo
+          echo "File:"
+          file idbloader.img
+
+          echo
+          echo "SHA256:"
+          sha256sum idbloader.img
+
+      # ==========================================================
+      # 16. 创建 Artifact 目录
+      # ==========================================================
+      - name: Prepare build output
+        if: always()
+        run: |
+          mkdir -p build-output/u-boot
+          mkdir -p build-output/idbloader
+          mkdir -p build-output/config
+
+      # ==========================================================
+      # 17. 收集 U-Boot 编译结果
+      # ==========================================================
+      - name: Collect U-Boot output
+        if: always()
+        run: |
+
+          cp u-boot/u-boot.itb build-output/u-boot/ 2>/dev/null || true
+
+          cp u-boot/u-boot.bin build-output/u-boot/ 2>/dev/null || true
+
+          cp u-boot/u-boot-nodtb.bin build-output/u-boot/ 2>/dev/null || true
+
+          cp u-boot/u-boot-dtb.bin build-output/u-boot/ 2>/dev/null || true
+
+          cp u-boot/u-boot.dtb build-output/u-boot/ 2>/dev/null || true
+
+          cp u-boot/spl/u-boot-spl.bin build-output/u-boot/ 2>/dev/null || true
+
+          cp u-boot/tpl/u-boot-tpl.bin build-output/u-boot/ 2>/dev/null || true
+
+      # ==========================================================
+      # 18. 收集 idbloader.img
+      # ==========================================================
+      - name: Collect idbloader
+        if: always()
+        run: |
+
+          cp u-boot/idbloader.img build-output/idbloader/ 2>/dev/null || true
+
+      # ==========================================================
+      # 19. 收集配置
+      # ==========================================================
+      - name: Collect configuration
+        if: always()
+        run: |
+
+          cp u-boot/.config build-output/config/u-boot.config 2>/dev/null || true
+
+          cp rk_defconfig.txt build-output/config/ 2>/dev/null || true
+
+      # ==========================================================
+      # 20. 生成 Build 信息
+      # ==========================================================
+      - name: Generate build information
+        if: always()
+        run: |
+          {
+            echo "=========================================="
+            echo "RK3326 U-Boot Build"
+            echo "=========================================="
+            echo
+            echo "Build date:"
+            date
+            echo
+            echo "Repository:"
+            echo "${GITHUB_REPOSITORY}"
+            echo
+            echo "Commit:"
+            echo "${GITHUB_SHA}"
+            echo
+            echo "Branch:"
+            echo "${GITHUB_REF_NAME}"
+            echo
+            echo "Defconfig:"
+            cat rk_defconfig.txt 2>/dev/null || true
+            echo
+            echo "Compiler:"
+            aarch64-linux-gnu-gcc --version | head -1
+            echo
+            echo "Architecture:"
+            echo "arm64"
+          } > build-output/build-info.txt
+
+      # ==========================================================
+      # 21. 生成 SHA256
+      # ==========================================================
+      - name: Generate SHA256
+        if: always()
+        run: |
+          cd build-output
+
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+
+          echo "=========================================="
+          echo "SHA256SUMS"
+          echo "=========================================="
+
+          cat SHA256SUMS
+
+      # ==========================================================
+      # 22. 显示最终成果
+      # ==========================================================
+      - name: Show build output
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "FINAL BUILD OUTPUT"
+          echo "=========================================="
+
+          find build-output -type f -exec ls -lh {} ;
+
+      # ==========================================================
+      # 23. 上传 Artifact
+      # ==========================================================
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3326-uboot-${{ github.sha }}
+          path: build-output/
+          if-no-files-found: warn
+          retention-days: 30
+
