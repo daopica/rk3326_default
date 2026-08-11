@@ -1,4 +1,3 @@
-```yaml
 name: RK3326 U-Boot Build
 
 "on":
@@ -38,4 +37,3 @@ jobs:
         run: |
           echo "GitHub Actions is working."
           echo "RK3326 build environment test passed."
-```
