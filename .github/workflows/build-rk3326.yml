@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     container:
-      image: ubuntu:18.04
+      image: ubuntu:20.04
 
     steps:
 
@@ -102,7 +102,7 @@ jobs:
           echo
           echo "Binutils:"
           aarch64-linux-gnu-ld --version | head -1
-
+        
       # ==========================================================
       # 4. 获取官方源码
       # ==========================================================
