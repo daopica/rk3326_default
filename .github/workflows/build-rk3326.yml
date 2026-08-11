@@ -1,7 +1,7 @@
 ```yaml
 name: RK3326 U-Boot Build
 
-on:
+"on":
   workflow_dispatch:
 
 jobs:
@@ -25,9 +25,13 @@ jobs:
           echo "Repository"
           echo "================================"
           ls -lah
+
           echo
+          echo "U-Boot:"
           ls -lah u-boot
+
           echo
+          echo "rkbin:"
           ls -lah rkbin
 
       - name: Test
