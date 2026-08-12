@@ -77,8 +77,8 @@ jobs:
       - name: Apply custom files
         working-directory: u-boot
         run: |
-          cp ../custom/rk3326-evb.dts arch/arm/dts/rk3326-evb.dts
-          cp ../custom/rk3326_defconfig configs/rk3326_defconfig
+          cp ../uboot_custom/rk3326-evb.dts arch/arm/dts/rk3326-evb.dts
+          cp ../uboot_custom/rk3326_defconfig configs/rk3326_defconfig
 
       - name: Make RK3326 defconfig
         working-directory: u-boot
