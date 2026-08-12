@@ -68,7 +68,10 @@ jobs:
             binutils-aarch64-linux-gnu
 
           aarch64-linux-gnu-gcc --version
-
+    
+      - name: Checkout repository
+        uses: actions/checkout@v4
+    
       - name: Clone official source
         run: |
           git clone https://github.com/rockchip-linux/u-boot.git
