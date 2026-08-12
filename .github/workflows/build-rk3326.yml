@@ -36,6 +36,8 @@ jobs:
           nproc
           export DEBIAN_FRONTEND=noninteractive
           export TZ=Asia/Shanghai
+          export ARCH=arm64
+          export CROSS_COMPILE: aarch64-linux-gnu-
       # ==========================================================
       # 2. 安装编译环境
       # ==========================================================
@@ -168,9 +170,6 @@ jobs:
       # ==========================================================
       - name: Build U-Boot
         working-directory: u-boot
-        env:
-          ARCH: arm64
-          CROSS_COMPILE: aarch64-linux-gnu-
         run: |       
           echo "=========================================="
           echo "Build RK3326 U-Boot"
@@ -190,16 +189,12 @@ jobs:
 
       - name: Build u-boot.itb
         working-directory: u-boot
-        env:
-          CROSS_COMPILE: aarch64-linux-gnu-
         run: |
           echo "=========================================="
           echo "Build u-boot.itb"
           echo "=========================================="
 
-          make \
-            CROSS_COMPILE="${CROSS_COMPILE}" \
-            u-boot.itb
+          make u-boot.itb
 
           echo
           echo "u-boot.itb:"
