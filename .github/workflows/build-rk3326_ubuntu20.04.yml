@@ -57,7 +57,7 @@ jobs:
             file \
             rsync \
             openssl
-
+          pip3 install pyelftools
           python3 --version
 
       - name: Install AArch64 toolchain
