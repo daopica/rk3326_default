@@ -181,12 +181,8 @@ jobs:
           nproc
 
           echo
-          echo "Build:"
-
-          make \
-            ARCH="${ARCH}" \
-            CROSS_COMPILE="${CROSS_COMPILE}" \
-            -j"$(nproc)"
+          echo "make"
+          make -j"$(nproc)"
 
       # ==========================================================
       # 8. 编译 u-boot.itb
