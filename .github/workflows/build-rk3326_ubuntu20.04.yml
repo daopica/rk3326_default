@@ -1,0 +1,153 @@
+```yaml
+name: RK3326 U-Boot Build
+
+"on":
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build RK3326 U-Boot
+    runs-on: ubuntu-22.04
+
+    container:
+      image: ubuntu:20.04
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      TZ: Asia/Shanghai
+      ARCH: arm
+      CROSS_COMPILE: aarch64-linux-gnu-
+
+    steps:
+
+      - name: Show environment
+        run: |
+          echo "=========================================="
+          echo "RK3326 U-Boot Build"
+          echo "=========================================="
+          cat /etc/os-release
+          echo
+          uname -a
+          echo
+          nproc
+
+      - name: Install build dependencies
+        run: |
+          echo "=========================================="
+          echo "Install build dependencies"
+          echo "=========================================="
+
+          ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+          apt-get update
+          apt-get install -y \
+            build-essential \
+            bc \
+            bison \
+            flex \
+            libssl-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            device-tree-compiler \
+            swig \
+            python3 \
+            python3-dev \
+            python3-pip \
+            git \
+            ca-certificates \
+            file \
+            rsync \
+            openssl
+
+          python3 --version
+
+      - name: Install AArch64 toolchain
+        run: |
+          apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
+
+          aarch64-linux-gnu-gcc --version
+
+      - name: Clone official source
+        run: |
+          git clone https://github.com/rockchip-linux/u-boot.git
+          git clone https://github.com/rockchip-linux/rkbin.git
+
+      - name: Make RK3326 defconfig
+        working-directory: u-boot
+        run: |
+          make distclean
+          cp ../rkbin/bin/rk33/rk3326_bl31_v1.34.elf bl31.elf
+          make rk3326_defconfig
+          echo "rk3326_defconfig" > ../rk_defconfig.txt
+
+      - name: Build U-Boot
+        working-directory: u-boot
+        run: |
+          echo "=========================================="
+          echo "Build RK3326 U-Boot"
+          echo "=========================================="
+          echo "ARCH=$ARCH"
+          echo "CROSS_COMPILE=$CROSS_COMPILE"
+          echo
+          make -j"$(nproc)"
+
+      - name: Build u-boot.itb
+        working-directory: u-boot
+        run: |
+          make u-boot.itb
+          ls -lh u-boot.itb
+
+      - name: Build idbloader.img
+        working-directory: u-boot
+        run: |
+          ./tools/mkimage \
+            -n rk3326 \
+            -T rksd \
+            -d tpl/u-boot-tpl.bin \
+            idbloader.img
+
+          cat spl/u-boot-spl.bin >> idbloader.img
+
+          ls -lh idbloader.img
+          sha256sum idbloader.img
+
+      - name: Prepare build output
+        if: always()
+        run: |
+          mkdir -p build-output/u-boot
+          mkdir -p build-output/idbloader
+          mkdir -p build-output/config
+
+          cp u-boot/u-boot.itb build-output/u-boot/ 2>/dev/null || true
+          cp u-boot/u-boot.bin build-output/u-boot/ 2>/dev/null || true
+          cp u-boot/u-boot-nodtb.bin build-output/u-boot/ 2>/dev/null || true
+          cp u-boot/u-boot-dtb.bin build-output/u-boot/ 2>/dev/null || true
+          cp u-boot/u-boot.dtb build-output/u-boot/ 2>/dev/null || true
+          cp u-boot/spl/u-boot-spl.bin build-output/u-boot/ 2>/dev/null || true
+          cp u-boot/tpl/u-boot-tpl.bin build-output/u-boot/ 2>/dev/null || true
+          cp u-boot/idbloader.img build-output/idbloader/ 2>/dev/null || true
+          cp u-boot/.config build-output/config/u-boot.config 2>/dev/null || true
+          cp rk_defconfig.txt build-output/config/ 2>/dev/null || true
+
+      - name: Generate SHA256
+        if: always()
+        run: |
+          cd build-output
+          find . -type f ! -name SHA256SUMS -print0 | \
+            sort -z | \
+            xargs -0 sha256sum > SHA256SUMS
+
+          cat SHA256SUMS
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3326-uboot-${{ github.sha }}
+          path: build-output/
+          if-no-files-found: warn
+          retention-days: 30
+```
