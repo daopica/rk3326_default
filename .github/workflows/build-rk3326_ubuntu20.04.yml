@@ -1,4 +1,3 @@
-```yaml
 name: RK3326 U-Boot Build V2 ubuntu20。04
 
 "on":
@@ -150,4 +149,3 @@ jobs:
           path: build-output/
           if-no-files-found: warn
           retention-days: 30
-```
