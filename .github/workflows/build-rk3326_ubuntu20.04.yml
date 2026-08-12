@@ -28,7 +28,7 @@ jobs:
           cat /etc/os-release
           echo
           uname -a
-          echo
+          echo 
           nproc
 
       - name: Install build dependencies
