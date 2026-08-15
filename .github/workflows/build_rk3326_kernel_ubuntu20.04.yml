@@ -126,12 +126,9 @@ jobs:
               append earlycon=uart8250,mmio32,0xff160000 console=ttyS4,1500000n8 root=/dev/mmcblk0p4 rootwait rw rootfstype=ext4
           EOF
 
-          dd if=/dev/zero \
-            of=boot.img \
-            bs=1M \
-            count=32
+          dd if=/dev/zero of=boot.img bs=1M count=32
 
-          mkfs.fat -F 32 boot.img
+          mkfs.fat -F 16 boot.img
 
           mmd -i boot.img ::/extlinux
 
