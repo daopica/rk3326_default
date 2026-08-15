@@ -178,7 +178,7 @@ jobs:
           echo "Apply custom files"
           echo "=========================================="
 
-          cp ../kernel_custom/1111rk3326-ydp021.dts \
+          cp ../kernel_custom/rk3326_linux.dts \
             arch/arm64/boot/dts/rockchip/rk3326_linux.dts
 
           cp ../kernel_custom/rk3326_linux_defconfig \
