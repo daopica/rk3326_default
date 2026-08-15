@@ -1,0 +1,293 @@
+name: RK3326_kernel_build_ubuntu20.24
+
+"on":
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: RK3326_kernel_build_ubuntu20.24
+    runs-on: ubuntu-22.04
+
+    container:
+      image: ubuntu:20.04
+
+    ennv:
+      DEBIAN_FRONTEND: noninteractive
+      TZ: Asia/Shanghai
+      ARCH: arm
+      CROSS_COMPILE: aarch64-linux-gun-
+
+    steps:
+      - name: Show environment
+        run: | 
+          echo "-----rk3326_kernel build------"
+          cat /etc/os-release
+          uname -a
+          nproc
+
+      - name : Install build dependencies
+        run: |
+          echo "install build dependencies"
+          ln fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+          apt-get update && apt-get install -y \
+            build-essential \
+            bc \
+            bison \
+            flex \
+            libssl-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            device-tree-compiler \
+            swig \
+            python3 \
+            python3-dev \
+            python3-pip \
+            git \
+            ca-certificates \
+            file \
+            rsync \
+            openssl
+          pip3 install pyelftools
+          python3 --version
+
+      - name: Install AArch64 toolchain
+        run: |
+          apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
+
+          aarch64-linux-gnu-gcc --version
+    
+      - name: Checkout repository
+        uses: actions/checkout@v4
+    
+      - name: Clone official source
+        run: |
+          git clone https://github.com/rockchip-linux/kernel.git
+          ls -lh
+
+      - name: Show Kernel source
+        working-directory: kernel
+        run: |
+          echo "=========================================="
+          echo "Kernel Version"
+          echo "=========================================="
+
+          head -n 5 Makefile
+
+          echo
+          echo "RK3326 DTS:"
+          find arch/arm64/boot/dts/rockchip \
+            -name "rk3326*.dts" | head -30
+
+      - name: Apply custom DTS and defconfig
+        working-directory: kernel
+        run: |
+          echo "=========================================="
+          echo "Apply custom files"
+          echo "=========================================="
+
+          cp ../kernel_custom/1111rk3326-ydp021.dts \
+            arch/arm64/boot/dts/rockchip/
+
+          cp ../kernel_custom/rk3326_linux_defconfig \
+            arch/arm64/configs/rk3326_linux_defconfig
+
+          ls -lh \
+            arch/arm64/boot/dts/rockchip/rk3326_linux.dts
+
+          ls -lh \
+            arch/arm64/configs/rk3326_linux_defconfig
+
+      - name: Configure Kernel
+        working-directory: kernel
+        run: |
+          echo "=========================================="
+          echo "Configure RK3326 Kernel"
+          echo "=========================================="
+
+          make mrproper
+
+          make rk3326_linux_defconfig
+
+          cp .config ../kernel.config
+
+          echo
+          echo "=========================================="
+          echo "MMC configuration"
+          echo "=========================================="
+
+          grep "CONFIG_MMC" .config || true
+          grep "CONFIG_MMC_DW" .config || true
+          grep "CONFIG_MMC_DW_ROCKCHIP" .config || true
+
+      - name: Build Kernel Image
+        working-directory: kernel
+        run: |
+          echo "=========================================="
+          echo "Build Kernel Image"
+          echo "=========================================="
+
+          make -j"$(nproc)" Image
+
+          ls -lh arch/arm64/boot/Image
+
+      - name: Build RK3326 DTB
+        working-directory: kernel
+        run: |
+          echo "=========================================="
+          echo "Build RK3326 DTB"
+          echo "=========================================="
+
+          make \
+            arch/arm64/boot/dts/rockchip/rk3326_linux.dtb
+
+          ls -lh \
+            arch/arm64/boot/dts/rockchip/rk3326_linux.dtb
+
+      - name: Build Kernel modules
+        working-directory: kernel
+        run: |
+          echo "=========================================="
+          echo "Build Kernel modules"
+          echo "=========================================="
+
+          make -j"$(nproc)" modules
+
+      - name: Prepare boot files
+        run: |
+          echo "=========================================="
+          echo "Prepare boot directory"
+          echo "=========================================="
+
+          mkdir -p boot/extlinux
+
+          cp kernel/arch/arm64/boot/Image \
+            boot/Image
+
+          cp kernel/arch/arm64/boot/dts/rockchip/rk3326_linux.dtb \
+            boot/rk3326_linux.dtb
+
+          cat > boot/extlinux/extlinux.conf << 'EOF'
+          label rk3326-linux
+              kernel /Image
+              fdt /rk3326_linux.dtb
+              append earlycon=uart8250,mmio32,0xff160000 console=ttyS4,1500000n8 root=/dev/mmcblk0p4 rootwait rw rootfstype=ext4
+          EOF
+
+          echo
+          echo "=========================================="
+          echo "Boot files"
+          echo "=========================================="
+
+          find boot -type f -exec ls -lh {} \;
+      
+      - name: Generate boot.img
+        run: |
+          echo "=========================================="
+          echo "Generate FAT boot.img"
+          echo "=========================================="
+
+          dd if=/dev/zero \
+            of=boot.img \
+            bs=1M \
+            count=32
+
+          mkfs.fat boot.img
+
+          mkdir -p boot-mnt
+
+          mount -o loop boot.img boot-mnt
+
+          cp -r boot/* boot-mnt/
+
+          sync
+
+          umount boot-mnt
+
+          ls -lh boot.img
+
+          file boot.img
+
+      - name: Prepare Kernel modules
+        working-directory: kernel
+        run: |
+          echo "=========================================="
+          echo "Install Kernel modules"
+          echo "=========================================="
+
+          mkdir -p ../modules-output
+
+          make \
+            INSTALL_MOD_PATH=../modules-output \
+            modules_install
+
+          cd ../modules-output
+
+          tar -czf ../kernel-modules.tar.gz .
+
+          cd ..
+
+          ls -lh kernel-modules.tar.gz
+
+      - name: Prepare build output
+        if: always()
+        run: |
+          mkdir -p build-output/kernel
+          mkdir -p build-output/dtb
+          mkdir -p build-output/boot
+          mkdir -p build-output/modules
+          mkdir -p build-output/config
+
+          cp kernel/arch/arm64/boot/Image \
+            build-output/kernel/ 2>/dev/null || true
+
+          cp kernel/arch/arm64/boot/dts/rockchip/rk3326_linux.dtb \
+            build-output/dtb/ 2>/dev/null || true
+
+          cp boot.img \
+            build-output/boot/ 2>/dev/null || true
+
+          cp boot/extlinux/extlinux.conf \
+            build-output/boot/extlinux.conf 2>/dev/null || true
+
+          cp kernel-modules.tar.gz \
+            build-output/modules/ 2>/dev/null || true
+
+          cp kernel.config \
+            build-output/config/rk3326.config 2>/dev/null || true
+
+          cp kernel/.config \
+            build-output/config/kernel.config 2>/dev/null || true
+
+          echo
+          echo "=========================================="
+          echo "Build output"
+          echo "=========================================="
+
+          find build-output -type f -exec ls -lh {} \;
+
+      - name: Generate SHA256
+        if: always()
+        run: |
+          cd build-output
+
+          find . \
+            -type f \
+            ! -name SHA256SUMS \
+            -print0 | \
+            sort -z | \
+            xargs -0 sha256sum \
+            > SHA256SUMS
+
+          cat SHA256SUMS
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3326-kernel-${{ github.sha }}
+          path: build-output/
+          if-no-files-found: warn
+          retention-days: 30
