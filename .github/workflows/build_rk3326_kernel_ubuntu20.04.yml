@@ -11,14 +11,19 @@ jobs:
       image: ubuntu:20.04
 
     env:
+      DEBIAN_FRONTEND: noninteractive
       ARCH: arm64
       CROSS_COMPILE: aarch64-linux-gnu-
 
     steps:
 
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Install dependencies
         run: |
           apt-get update
+
           apt-get install -y \
             build-essential \
             bc \
@@ -35,12 +40,15 @@ jobs:
             git \
             ca-certificates \
             gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu
+            g++-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
 
           pip3 install pyelftools
 
-      - name: Checkout
-        uses: actions/checkout@v4
+          echo "================================"
+          cat /etc/os-release
+          echo "================================"
+          aarch64-linux-gnu-gcc --version
 
       - name: Clone Kernel
         run: |
@@ -58,10 +66,21 @@ jobs:
       - name: Configure Kernel
         working-directory: kernel
         run: |
+          make mrproper
+
           make \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
             rk3326_linux_defconfig
+
+      - name: Check MMC configuration
+        working-directory: kernel
+        run: |
+          echo "========== MMC =========="
+
+          grep -E \
+            "CONFIG_MMC|CONFIG_MMC_DW|CONFIG_MMC_DW_ROCKCHIP|CONFIG_DMA_SHARED_BUFFER|CONFIG_SYNC_FILE" \
+            .config || true
 
       - name: Build Kernel
         working-directory: kernel
@@ -72,6 +91,9 @@ jobs:
             -j$(nproc) \
             Image
 
+      - name: Build DTB
+        working-directory: kernel
+        run: |
           make \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
@@ -94,20 +116,14 @@ jobs:
               append earlycon=uart8250,mmio32,0xff160000 console=ttyS4,1500000n8 root=/dev/mmcblk0p4 rootwait rw rootfstype=ext4
           EOF
 
-          dd if=/dev/zero \
-            of=boot.img \
-            bs=1M \
-            count=32
+          dd if=/dev/zero of=boot.img bs=1M count=32
 
           mkfs.fat -F 32 boot.img
 
           mmd -i boot.img ::/extlinux
 
-          mcopy -i boot.img \
-            boot/Image \
-            boot/rk3326_linux.dtb \
-            ::/
-
+          mcopy -i boot.img boot/Image ::
+          mcopy -i boot.img boot/rk3326_linux.dtb ::
           mcopy -i boot.img \
             boot/extlinux/extlinux.conf \
             ::/extlinux/
@@ -115,27 +131,31 @@ jobs:
           ls -lh boot.img
 
       - name: Prepare output
+        if: always()
         run: |
           mkdir -p output
 
-          cp kernel/arch/arm64/boot/Image \
-            output/
+          cp kernel/arch/arm64/boot/Image output/ 2>/dev/null || true
 
-          cp kernel/arch/arm64/boot/dts/rockchip/rk3326_linux.dtb \
-            output/
+          cp \
+            kernel/arch/arm64/boot/dts/rockchip/rk3326_linux.dtb \
+            output/ 2>/dev/null || true
 
-          cp boot.img \
-            output/
+          cp boot.img output/ 2>/dev/null || true
 
-          cp boot/extlinux/extlinux.conf \
-            output/
+          cp \
+            boot/extlinux/extlinux.conf \
+            output/extlinux.conf 2>/dev/null || true
 
-          cp kernel/.config \
-            output/kernel.config
+          cp kernel/.config output/kernel.config 2>/dev/null || true
+
+          find output -type f -exec ls -lh {} \;
 
       - name: Upload
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rk3326-kernel-${{ github.sha }}
           path: output/
+          if-no-files-found: warn
           retention-days: 30
