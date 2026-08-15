@@ -1,4 +1,4 @@
-name: RK3326 Kernel Build
+name: RK3326 Kernel Build V1 ubuntu20.04
 
 "on":
   workflow_dispatch:
