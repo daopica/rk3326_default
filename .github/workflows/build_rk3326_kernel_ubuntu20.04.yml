@@ -123,7 +123,7 @@ jobs:
           label rk3326-linux
               kernel /Image
               fdt /rk3326_linux.dtb
-              append earlycon=uart8250,mmio32,0xff160000 console=ttyS2,1500000n8 root=/dev/mmcblk0p4 rootwait rw rootfstype=ext4
+              append earlycon=uart8250,mmio32,0xff160000 console=ttyS2,1500000n8 root=PARTUUID=f14f0000-0000-4942-8000-0d6f00004233 rootwait rw rootfstype=ext4
           EOF
 
           dd if=/dev/zero of=boot.img bs=1M count=32
