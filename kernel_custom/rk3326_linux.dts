@@ -97,6 +97,10 @@
 	};
 };
 
+&{/chosen} {
+    bootargs = "";
+};
+
 &bus_apll {
 	bus-supply = <&vdd_logic>;
 	status = "okay";
