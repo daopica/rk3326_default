@@ -1,0 +1,186 @@
+name: RK3326 Kernel Build V1 ubuntu22.04
+
+"on":
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    container:
+      image: ubuntu:22.04
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      ARCH: arm64
+      CROSS_COMPILE: aarch64-linux-gnu-
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+
+          apt-get install -y \
+            build-essential \
+            bc \
+            bison \
+            flex \
+            libssl-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            device-tree-compiler \
+            dosfstools \
+            mtools \
+            python3 \
+            python3-pip \
+            git \
+            ca-certificates \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
+
+          pip3 install pyelftools
+
+          echo "================================"
+          cat /etc/os-release
+          echo "================================"
+          aarch64-linux-gnu-gcc --version
+
+      - name: Clone Kernel
+        run: |
+          git clone \
+            --depth=1 \
+            https://github.com/JustEnoughLinuxOS/rk3326-kernel.git
+
+      - name: Apply custom files
+        run: |
+          cp kernel_custom/rk3326_linux.dts \
+            kernel/arch/arm64/boot/dts/rockchip/rk3326_linux.dts
+
+          cp kernel_custom/rk3326_linux_defconfig \
+            kernel/arch/arm64/configs/rk3326_linux_defconfig
+
+      - name: Configure Kernel
+        working-directory: kernel
+        run: |
+          make mrproper
+
+          make \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            rk3326_linux_defconfig
+
+          echo "================================"
+          echo "Kernel configuration complete"
+          echo "================================"
+
+      - name: Check MMC configuration
+        working-directory: kernel
+        run: |
+          echo "========== MMC =========="
+
+          grep -E \
+            "CONFIG_MMC|CONFIG_MMC_DW|CONFIG_MMC_DW_ROCKCHIP|CONFIG_DMA_SHARED_BUFFER|CONFIG_SYNC_FILE" \
+            .config || true
+
+      - name: Build Kernel Image
+        working-directory: kernel
+        run: |
+          make \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            -j$(nproc) \
+            Image
+
+          ls -lh arch/arm64/boot/Image
+
+      - name: Build DTB
+        working-directory: kernel
+        run: |
+          make \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            rockchip/rk3326_linux.dtb
+
+          ls -lh \
+            arch/arm64/boot/dts/rockchip/rk3326_linux.dtb
+
+      - name: Build boot.img
+        run: |
+          mkdir -p boot/extlinux
+
+          cp kernel/arch/arm64/boot/Image \
+            boot/Image
+
+          cp kernel/arch/arm64/boot/dts/rockchip/rk3326_linux.dtb \
+            boot/rk3326_linux.dtb
+
+          cat > boot/extlinux/extlinux.conf << 'EOF'
+          label rk3326-linux
+              kernel /Image
+              fdt /rk3326_linux.dtb
+              append earlycon=uart8250,mmio32,0xff160000 console=ttyS2,1500000n8 loglevel=8 ignore_loglevel root=PARTUUID=f14f0000-0000-4942-8000-0d6f00004233 rootwait rw rootfstype=ext4
+          EOF
+
+          dd if=/dev/zero of=boot.img bs=1M count=32
+
+          mkfs.fat -F 16 boot.img
+
+          mmd -i boot.img ::/extlinux
+
+          mcopy -i boot.img boot/Image ::
+          mcopy -i boot.img boot/rk3326_linux.dtb ::
+
+          mcopy -i boot.img \
+            boot/extlinux/extlinux.conf \
+            ::/extlinux/
+
+          echo "================================"
+          echo "boot.img"
+          echo "================================"
+
+          ls -lh boot.img
+
+      - name: Prepare output
+        if: always()
+        run: |
+          mkdir -p output
+
+          cp \
+            kernel/arch/arm64/boot/Image \
+            output/ 2>/dev/null || true
+
+          cp \
+            kernel/arch/arm64/boot/dts/rockchip/rk3326_linux.dtb \
+            output/ 2>/dev/null || true
+
+          cp \
+            boot.img \
+            output/ 2>/dev/null || true
+
+          cp \
+            boot/extlinux/extlinux.conf \
+            output/extlinux.conf 2>/dev/null || true
+
+          cp \
+            kernel/.config \
+            output/kernel.config 2>/dev/null || true
+
+          echo "================================"
+          echo "Build Output"
+          echo "================================"
+
+          find output -type f -exec ls -lh {} \;
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3326-kernel-${{ github.sha }}
+          path: output/
+          if-no-files-found: warn
+          retention-days: 30
