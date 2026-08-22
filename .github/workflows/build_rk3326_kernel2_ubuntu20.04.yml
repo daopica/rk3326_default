@@ -1,4 +1,4 @@
-name: RK3326 Kernel Build V1 ubuntu22.04
+name: RK3326 Kernel Build JustEnoughLinuxOS ubuntu22.04
 
 "on":
   workflow_dispatch:
